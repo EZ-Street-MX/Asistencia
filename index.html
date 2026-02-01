@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Asistencia Empleados</title>
+
+<style>
+body{margin:0;font-family:system-ui;background:#0b0f14;color:#e9eef5}
+.wrap{max-width:820px;margin:auto;padding:20px}
+.card{background:#111826;border:1px solid #1f2a3a;border-radius:14px;padding:16px;margin-bottom:16px}
+input,button{width:100%;padding:12px;margin-top:8px;border-radius:10px;border:1px solid #2a3a52;background:#0e1522;color:#fff}
+button{cursor:pointer;background:#173155}
+button:hover{filter:brightness(1.1)}
+.ok{color:#6ee7b7}
+.warn{color:#fde68a}
+.bad{color:#fca5a5}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{border-bottom:1px solid #243246;padding:8px;text-align:left}
+</style>
+</head>
+
+<body>
+<div class="wrap">
+
+<h2>Control de Asistencia</h2>
+
+<div id="msg" class="card" style="display:none"></div>
+
+<div id="login" class="card">
+  <h3>Acceso</h3>
+  <input id="code" placeholder="Número de empleado">
+  <input id="pin" type="password" placeholder="PIN">
+  <button onclick="login()">Entrar</button>
+</div>
+
+<div id="employee" class="card" style="display:none">
+  <h3 id="empName"></h3>
+  <p>Sede: <b id="siteName"></b></p>
+  <button onclick="mark('ENTRADA')">Marcar Entrada</button>
+  <button onclick="mark('SALIDA')">Marcar Salida</button>
+  <button onclick="logout()">Salir</button>
+</div>
+
+<div id="admin" class="card" style="display:none">
+  <h3>Panel Admin</h3>
+  <button onclick="exportCSV()">Exportar CSV</button>
+  <button onclick="clearData()" style="background:#5a1720">Borrar registros</button>
+
+  <table style="margin-top:12px">
+    <thead>
+      <tr>
+        <th>Fecha</th>
+        <th>Empleado</th>
+        <th>Tipo</th>
+        <th>Distancia (m)</th>
+        <th>Precisión</th>
+        <th>Estatus</th>
+      </tr>
+    </thead>
+    <tbody id="table"></tbody>
+  </table>
+
+  <button onclick="logout()">Salir</button>
+</div>
+
+</div>
+
+<script>
+const ADMIN_PIN="9999";
+const SITE={name:"Planta Principal",lat:25.6866,lng:-100.3161,radius:200};
+const EMPLOYEES=[
+  {code:"1001",name:"Juan Pérez",pin:"1111"},
+  {code:"1002",name:"María López",pin:"2222"}
+];
+const LS={session:"session",records:"records"};
+const $=id=>document.getElementById(id);
+
+function msg(t,c="ok"){
+  $("msg").style.display="block";
+  $("msg").innerHTML=`<span class="${c}">${t}</span>`;
+  setTimeout(()=>{$("msg").style.display="none"},4000);
+}
+
+function login(){
+  const c=$("code").value.trim();
+  const p=$("pin").value.trim();
+  if(!c||!p)return msg("Completa los campos","warn");
+
+  if(c==="ADMIN"){
+    if(p!==ADMIN_PIN)return msg("PIN incorrecto","bad");
+    localStorage.setItem(LS.session,"admin");
+    showAdmin();
+    return;
+  }
+
+  const emp=EMPLOYEES.find(e=>e.code===c&&e.pin===p);
+  if(!emp)return msg("Datos incorrectos","bad");
+
+  localStorage.setItem(LS.session,emp.code);
+  showEmployee(emp);
+}
+
+function logout(){
+  localStorage.removeItem(LS.session);
+  location.reload();
+}
+
+function showEmployee(emp){
+  $("login").style.display="none";
+  $("employee").style.display="block";
+  $("empName").innerText=emp.name;
+  $("siteName").innerText=SITE.name;
+}
+
+function showAdmin(){
+  $("login").style.display="none";
+  $("admin").style.display="block";
+  render();
+}
+
+function mark(type){
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const d=distance(pos.coords.latitude,pos.coords.longitude,SITE.lat,SITE.lng);
+    const status=d<=SITE.radius?"approved":"rejected";
+    const rec={
+      date:new Date().toISOString(),
+      emp:localStorage.getItem(LS.session),
+      type,
+      dist:Math.round(d),
+      acc:Math.round(pos.coords.accuracy),
+      status
+    };
+    const data=JSON.parse(localStorage.getItem(LS.records)||"[]");
+    data.unshift(rec);
+    localStorage.setItem(LS.records,JSON.stringify(data));
+    msg(`Registro ${status}`,status==="approved"?"ok":"bad");
+  },()=>msg("Error GPS","bad"),{enableHighAccuracy:true});
+}
+
+function render(){
+  const data=JSON.parse(localStorage.getItem(LS.records)||"[]");
+  $("table").innerHTML=data.map(r=>`
+    <tr>
+      <td>${r.date}</td>
+      <td>${r.emp}</td>
+      <td>${r.type}</td>
+      <td>${r.dist}</td>
+      <td>${r.acc}</td>
+      <td>${r.status}</td>
+    </tr>`).join("");
+}
+
+function exportCSV(){
+  const data=JSON.parse(localStorage.getItem(LS.records)||"[]");
+  let csv="Fecha,Empleado,Tipo,Distancia,Precision,Estatus\n";
+  data.forEach(r=>csv+=`${r.date},${r.emp},${r.type},${r.dist},${r.acc},${r.status}\n`);
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+  a.download="asistencia.csv";
+  a.click();
+}
+
+function clearData(){
+  if(confirm("¿Borrar todo?")){
+    localStorage.removeItem(LS.records);
+    render();
+  }
+}
+
+function distance(lat1,lng1,lat2,lng2){
+  const R=6371000;
+  const dLat=(lat2-lat1)*Math.PI/180;
+  const dLng=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+
+    Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+
+(function(){
+  const s=localStorage.getItem(LS.session);
+  if(s==="admin")showAdmin();
+  else if(s){
+    const emp=EMPLOYEES.find(e=>e.code===s);
+    if(emp)showEmployee(emp);
+  }
+})();
+</script>
+
+</body>
+</html>
