@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EZ Street | Asistencia</title>
+<style>
+  :root{
+    --bg:#0b1220;
+    --card:#111a2e;
+    --line:#24324f;
+    --muted:#b8c3d6;
+    --btn:#1f3b6d;
+    --btn2:#274a86;
+    --danger:#7a1f2a;
+    --ok:#2c7a4b;
+  }
+  body{font-family:Arial,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:#fff;margin:0;padding:20px}
+  .card{max-width:860px;margin:0 auto 14px auto;background:var(--card);padding:18px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+  h2,h3,h4{margin:0 0 10px 0}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .row > *{flex:1 1 160px}
+  input,select{width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:#0f1830;color:#fff;outline:none}
+  input::placeholder{color:#6f7ea0}
+  button{width:100%;padding:12px;margin-top:10px;border:none;border-radius:10px;background:var(--btn);color:#fff;font-size:16px;cursor:pointer}
+  button:hover{background:var(--btn2)}
+  .btn-inline{width:auto;padding:8px 10px;margin:0;border-radius:10px;font-size:14px}
+  .btn-danger{background:var(--danger)}
+  .btn-danger:hover{filter:brightness(1.1)}
+  .btn-ok{background:var(--ok)}
+  .btn-ok:hover{filter:brightness(1.1)}
+  .hidden{display:none}
+  .msg{margin:8px 0 0 0;color:#ff8a8a;min-height:18px}
+  table{width:100%;border-collapse:collapse;margin-top:12px}
+  th,td{border-bottom:1px solid var(--line);padding:8px;text-align:left;vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:13px}
+  td{font-size:14px}
+  .pill{display:inline-block;padding:3px 8px;border-radius:999px;background:#0f1830;border:1px solid var(--line);color:var(--muted);font-size:12px}
+  .tabs{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 0 0}
+  .tab{flex:1 1 160px;padding:10px;border-radius:10px;background:#0f1830;border:1px solid var(--line);color:#fff;cursor:pointer}
+  .tab.active{background:var(--btn);border-color:transparent}
+  .subtle{color:var(--muted);font-size:13px;line-height:1.35}
+  .grid2{display:grid;grid-template-columns:1fr;gap:10px}
+  @media(min-width:900px){ .grid2{grid-template-columns:1fr 1fr} }
+  a{color:#89b4ff;text-decoration:none}
+  a:hover{text-decoration:underline}
+  .toast{
+    position:fixed;left:50%;bottom:18px;transform:translateX(-50%);
+    background:#0f1830;border:1px solid var(--line);color:#fff;
+    padding:10px 14px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.35);
+    max-width:92vw;display:none;z-index:9999
+  }
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+</style>
+</head>
+<body>
+
+<div class="toast" id="toast"></div>
+
+<!-- LOGIN -->
+<div class="card" id="login">
+  <h2>Control de Asistencia</h2>
+  <div class="subtle">
+    Accede como <b>ADMIN2</b> o como empleado.
+    Puedes iniciar con <b>Código</b> <i>o</i> <b>Nombre</b> + PIN.
+  </div>
+  <div class="msg" id="msg"></div>
+  <div class="row">
+    <input id="user" placeholder="Código o Nombre o ADMIN2" autocomplete="username">
+    <input id="pin" type="password" placeholder="PIN" autocomplete="current-password" inputmode="numeric">
+  </div>
+  <button onclick="doLogin()">Entrar</button>
+</div>
+
+<!-- ADMIN -->
+<div class="card hidden" id="adminWrap">
+  <h3>Panel Admin <span class="pill">Admin activo: ADMIN2</span></h3>
+
+  <div class="subtle">
+    📍 Ubicación: se guarda para <b>Entrada</b> y <b>Salida</b> (lat/lng + precisión + link a Google Maps).
+    <br>⚠️ Todo se guarda en <b>este dispositivo</b>. Si quieres que TODOS los celulares registren al mismo panel, hay que conectar backend (Sheets/Firebase).
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" id="tabUsers" onclick="showAdminTab('users')">Usuarios</div>
+    <div class="tab" id="tabLogs" onclick="showAdminTab('logs')">Registros</div>
+  </div>
+
+  <!-- USERS TAB -->
+  <div id="adminUsers">
+    <h4 style="margin-top:14px">Crear / editar empleado</h4>
+    <div class="row">
+      <input id="eCode" placeholder="Código (ej. 1003)" inputmode="numeric">
+      <input id="eName" placeholder="Nombre (ej. Luis García)">
+      <input id="ePin" placeholder="PIN (4-8 dígitos)" inputmode="numeric">
+    </div>
+    <div class="row">
+      <button class="btn-ok" onclick="saveEmp()">Guardar (crear/actualizar)</button>
+      <button class="btn-danger" onclick="clearEmpFields()">Limpiar</button>
+    </div>
+
+    <table>
+      <thead><tr><th>Código</th><th>Nombre</th><th>PIN</th><th>Acción</th></tr></thead>
+      <tbody id="empTable"></tbody>
+    </table>
+
+    <div class="row" style="margin-top:8px">
+      <button class="btn-inline" onclick="exportUsers()">Exportar usuarios (CSV)</button>
+      <button class="btn-inline btn-danger" onclick="clearRecords()">Borrar TODOS los registros</button>
+    </div>
+  </div>
+
+  <!-- LOGS TAB -->
+  <div id="adminLogs" class="hidden">
+    <h4 style="margin-top:14px">Registros por día</h4>
+
+    <div class="grid2">
+      <div>
+        <div class="subtle">Selecciona un día (calendario) y verás el panel de ese día.</div>
+        <div class="row" style="margin-top:8px">
+          <input id="dayPicker" type="date">
+          <button class="btn-inline" onclick="setToday()">Hoy</button>
+          <button class="btn-inline" onclick="renderDay(true)">Actualizar</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn-inline" onclick="exportDayCSV()">Exportar CSV (día seleccionado)</button>
+          <button class="btn-inline btn-danger" onclick="deleteDay()">Borrar registros del día</button>
+        </div>
+      </div>
+      <div>
+        <div class="subtle"><b>Resumen</b>: total de horas por empleado.</div>
+        <div id="daySummary" style="margin-top:10px"></div>
+      </div>
+    </div>
+
+    <h4 style="margin-top:14px">Detalle (Entrada / Salida / Ubicación)</h4>
+    <div class="subtle">Se agrupa por empleado. El total se calcula sumando pares <b>Entrada → Salida</b> en orden.</div>
+    <div id="dayDetails"></div>
+  </div>
+
+  <button style="margin-top:16px" onclick="logout()">Salir</button>
+</div>
+
+<!-- EMPLOYEE -->
+<div class="card hidden" id="empWrap">
+  <h3 id="empName"></h3>
+  <div class="subtle" id="empInfo"></div>
+
+  <button class="btn-ok" onclick="mark('Entrada')">Marcar Entrada</button>
+  <button onclick="mark('Salida')">Marcar Salida</button>
+
+  <div class="subtle" style="margin-top:12px">
+    ✅ Si el navegador permite GPS, se guarda ubicación. Si no, igual registra (ubicación = “No disponible”).
+  </div>
+
+  <div style="margin-top:14px">
+    <h4 style="margin-bottom:6px">Últimos registros de hoy</h4>
+    <div id="empLast"></div>
+  </div>
+
+  <button style="margin-top:16px" onclick="logout()">Salir</button>
+</div>
+
+<script>
+/* =========================
+   CONFIG (ADMIN FIJO)
+========================= */
+const ADMIN_USER = "ADMIN2";
+const ADMIN_PIN  = "4321";
+
+/* =========================
+   STORAGE KEYS
+========================= */
+const K_EMP = "employees";
+const K_REC = "records";
+const K_TOUCH = "records_touch";
+
+/* =========================
+   STORAGE HELPERS
+========================= */
+function lsGet(key, fallback){
+  try{
+    const v = localStorage.getItem(key);
+    return (v === null || v === undefined) ? fallback : v;
+  }catch(e){ return fallback; }
+}
+function lsSet(key, value){
+  try{
+    localStorage.setItem(key, value);
+  }catch(e){
+    alert("No se pudo guardar en el dispositivo (storage bloqueado).");
+  }
+}
+
+/* =========================
+   INIT DEFAULT DATA
+========================= */
+if(!lsGet(K_EMP, null)){
+  lsSet(K_EMP, JSON.stringify([
+    {code:"1001", name:"Juan Pérez", pin:"1111"},
+    {code:"1002", name:"María López", pin:"2222"}
+  ]));
+}
+if(!lsGet(K_REC, null)) lsSet(K_REC, "[]");
+
+/* =========================
+   STATE
+========================= */
+let currentEmp = null;
+let adminTab = "users";
+let refreshTimer = null;
+
+/* =========================
+   DOM HELPERS
+========================= */
+const $ = (id)=>document.getElementById(id);
+
+function toast(text){
+  const t = $("toast");
+  t.textContent = text;
+  t.style.display = "block";
+  clearTimeout(t._to);
+  t._to = setTimeout(()=>{ t.style.display="none"; }, 2200);
+}
+
+function norm(s){ return (s||"").trim().toLowerCase(); }
+function pad2(n){ return String(n).padStart(2,"0"); }
+
+function toLocalTime(iso){
+  const d = new Date(iso);
+  return pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds());
+}
+function toLocalDateKey(iso){
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+}
+function hoursToHMM(totalHours){
+  const mins = Math.round(totalHours*60);
+  const h = Math.floor(mins/60);
+  const m = mins%60;
+  return `${h}h ${pad2(m)}m`;
+}
+function mapsLink(lat,lng){
+  if(lat==null || lng==null) return "";
+  const url = `https://www.google.com/maps?q=${lat},${lng}`;
+  return `<a href="${url}" target="_blank" rel="noopener">Ver mapa</a>`;
+}
+function coordText(r){
+  if(r.lat==null || r.lng==null) return "No disponible";
+  const acc = r.precision==null ? "?" : Math.round(r.precision);
+  return `<span class="mono">${r.lat.toFixed(6)}, ${r.lng.toFixed(6)}</span> <span class="pill">${acc}m</span> · ${mapsLink(r.lat,r.lng)}`;
+}
+function downloadText(filename, text){
+  const blob = new Blob([text], {type:"text/plain;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+/* =========================
+   LOGIN / LOGOUT
+========================= */
+function doLogin(){
+  const uRaw = $("user").value;
+  const p = $("pin").value.trim();
+  const u = uRaw.trim();
+
+  if(u === ADMIN_USER && p === ADMIN_PIN){
+    $("login").classList.add("hidden");
+    $("adminWrap").classList.remove("hidden");
+    loadEmps();
+    initDayPicker();
+    showAdminTab("users");
+    return;
+  }
+
+  const emps = JSON.parse(lsGet(K_EMP, "[]"));
+  const uN = norm(u);
+
+  // Acepta: código exacto O nombre exacto (case-insensitive)
+  const emp = emps.find(e => (String(e.code).trim() === u) || (norm(e.name) === uN));
+  if(!emp || String(emp.pin).trim() !== p){
+    $("msg").textContent = "Datos incorrectos (usa Código o Nombre + PIN)";
+    return;
+  }
+
+  currentEmp = emp;
+  $("login").classList.add("hidden");
+  $("empWrap").classList.remove("hidden");
+  $("empName").textContent = emp.name;
+  $("empInfo").innerHTML = `<span class="pill">Código: ${emp.code}</span>`;
+  renderEmpLast();
+}
+
+function logout(){ location.reload(); }
+
+/* =========================
+   ADMIN TABS + AUTO REFRESH
+========================= */
+function showAdminTab(which){
+  adminTab = which;
+  if(which === "users"){
+    $("adminUsers").classList.remove("hidden");
+    $("adminLogs").classList.add("hidden");
+    $("tabUsers").classList.add("active");
+    $("tabLogs").classList.remove("active");
+    stopAutoRefresh();
+  }else{
+    $("adminUsers").classList.add("hidden");
+    $("adminLogs").classList.remove("hidden");
+    $("tabUsers").classList.remove("active");
+    $("tabLogs").classList.add("active");
+    initDayPicker();
+    renderDay(true);
+    startAutoRefresh();
+  }
+}
+
+function startAutoRefresh(){
+  stopAutoRefresh();
+  refreshTimer = setInterval(()=>{ if(adminTab==="logs") renderDay(false); }, 1500);
+}
+function stopAutoRefresh(){
+  if(refreshTimer){ clearInterval(refreshTimer); refreshTimer = null; }
+}
+window.addEventListener("storage", (e)=>{
+  if(e.key === K_REC || e.key === K_TOUCH){
+    if(adminTab === "logs") renderDay(true);
+  }
+});
+
+/* =========================
+   USERS CRUD
+========================= */
+function loadEmps(){
+  const emps = JSON.parse(lsGet(K_EMP,"[]"));
+  const tb = $("empTable");
+  tb.innerHTML = "";
+  emps.sort((a,b)=>String(a.code).localeCompare(String(b.code))).forEach(e=>{
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${e.code}</td>
+      <td>${e.name}</td>
+      <td>${e.pin}</td>
+      <td>
+        <button class="btn-inline" onclick="editEmp('${String(e.code).replaceAll("'","")}')">Editar</button>
+        <button class="btn-inline btn-danger" onclick="deleteEmp('${String(e.code).replaceAll("'","")}')">Borrar</button>
+      </td>`;
+    tb.appendChild(tr);
+  });
+}
+
+function validateEmp(code,name,pin){
+  if(!code || !name || !pin) return "Completa código, nombre y PIN.";
+  if(!/^[0-9]+$/.test(code)) return "El código debe ser solo números (ej. 1001).";
+  if(!/^[0-9]{4,8}$/.test(pin)) return "El PIN debe tener 4 a 8 dígitos.";
+  return "";
+}
+
+function saveEmp(){
+  const c = $("eCode").value.trim();
+  const n = $("eName").value.trim();
+  const p = $("ePin").value.trim();
+
+  const err = validateEmp(c,n,p);
+  if(err) return alert(err);
+
+  let emps = JSON.parse(lsGet(K_EMP,"[]"));
+  const i = emps.findIndex(x=>String(x.code).trim()===c);
+  if(i>=0) emps[i] = {code:c,name:n,pin:p};
+  else emps.push({code:c,name:n,pin:p});
+  lsSet(K_EMP, JSON.stringify(emps));
+
+  clearEmpFields();
+  loadEmps();
+  toast("✅ Usuario guardado. Ya puedes iniciar sesión con Código o Nombre + PIN.");
+}
+
+function clearEmpFields(){
+  $("eCode").value = "";
+  $("eName").value = "";
+  $("ePin").value  = "";
+}
+
+function editEmp(code){
+  const e = JSON.parse(lsGet(K_EMP,"[]")).find(x=>String(x.code).trim()===String(code).trim());
+  if(!e) return;
+  $("eCode").value = String(e.code);
+  $("eName").value = e.name;
+  $("ePin").value = String(e.pin);
+  toast("Editando usuario " + e.code);
+}
+
+function deleteEmp(code){
+  if(!confirm("¿Borrar este empleado?")) return;
+  let emps = JSON.parse(lsGet(K_EMP,"[]"));
+  emps = emps.filter(x=>String(x.code).trim()!==String(code).trim());
+  lsSet(K_EMP, JSON.stringify(emps));
+  loadEmps();
+  toast("Usuario borrado");
+}
+
+function exportUsers(){
+  const emps = JSON.parse(lsGet(K_EMP,"[]"));
+  const header = "codigo,nombre,pin";
+  const lines = emps.map(e=>`"${String(e.code).replaceAll('"','""')}","${String(e.name).replaceAll('"','""')}","${String(e.pin).replaceAll('"','""')}"`);
+  downloadText("usuarios.csv", header + "\n" + lines.join("\n"));
+}
+
+/* =========================
+   RECORDING (NO RESTRICTION)
+========================= */
+function mark(tipo){
+  if(!currentEmp) return;
+
+  // siempre registra, con o sin GPS
+  if(!navigator.geolocation){
+    saveRecord(tipo, null);
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    pos => saveRecord(tipo, pos),
+    err => saveRecord(tipo, null),
+    { enableHighAccuracy:true, timeout:9000, maximumAge:0 }
+  );
+}
+
+function saveRecord(tipo, pos){
+  const recs = JSON.parse(lsGet(K_REC,"[]"));
+  const nowIso = new Date().toISOString();
+
+  recs.push({
+    empleado: currentEmp.name,
+    codigo: String(currentEmp.code),
+    tipo: tipo,
+    fecha: nowIso,
+    lat: pos ? pos.coords.latitude : null,
+    lng: pos ? pos.coords.longitude : null,
+    precision: pos ? pos.coords.accuracy : null
+  });
+
+  lsSet(K_REC, JSON.stringify(recs));
+  lsSet(K_TOUCH, String(Date.now())); // fuerza refresh en otras pestañas
+  toast("✅ " + tipo + " registrada");
+  renderEmpLast();
+}
+
+function renderEmpLast(){
+  const today = toLocalDateKey(new Date().toISOString());
+  const recs = JSON.parse(lsGet(K_REC,"[]"))
+    .filter(r => String(r.codigo)===String(currentEmp.code) && toLocalDateKey(r.fecha)===today)
+    .sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))
+    .slice(0,6);
+
+  if(recs.length===0){
+    $("empLast").innerHTML = `<div class="subtle">Aún no hay registros hoy.</div>`;
+    return;
+  }
+
+  const rows = recs.map(r=>{
+    return `<tr>
+      <td><span class="pill">${r.tipo}</span></td>
+      <td>${toLocalTime(r.fecha)}</td>
+      <td>${coordText(r)}</td>
+    </tr>`;
+  }).join("");
+
+  $("empLast").innerHTML = `
+    <table>
+      <thead><tr><th>Tipo</th><th>Hora</th><th>Ubicación</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+/* =========================
+   ADMIN: DAY VIEW (CALENDAR)
+========================= */
+function initDayPicker(){
+  const dp = $("dayPicker");
+  if(!dp.value){
+    const now = new Date();
+    dp.value = `${now.getFullYear()}-${pad2(now.getMonth()+1)}-${pad2(now.getDate())}`;
+  }
+  dp.onchange = () => renderDay(true);
+}
+function setToday(){
+  const now = new Date();
+  $("dayPicker").value = `${now.getFullYear()}-${pad2(now.getMonth()+1)}-${pad2(now.getDate())}`;
+  renderDay(true);
+}
+function getDayRecords(dayKey){
+  const recs = JSON.parse(lsGet(K_REC,"[]"));
+  return recs.filter(r => toLocalDateKey(r.fecha) === dayKey);
+}
+
+function renderDay(showToast){
+  const dayKey = $("dayPicker").value;
+  const dayRecs = getDayRecords(dayKey);
+
+  const byEmp = {};
+  dayRecs.forEach(r=>{
+    const k = String(r.codigo || r.empleado);
+    if(!byEmp[k]) byEmp[k] = [];
+    byEmp[k].push(r);
+  });
+
+  const empKeys = Object.keys(byEmp).sort((a,b)=>a.localeCompare(b));
+  if(empKeys.length === 0){
+    $("daySummary").innerHTML = `<div class="pill">Sin registros para ${dayKey}</div>`;
+    $("dayDetails").innerHTML = `<div class="subtle" style="margin-top:10px">No hay registros para este día.</div>`;
+    return;
+  }
+
+  const summaryRows = [];
+  const detailsBlocks = [];
+
+  empKeys.forEach(k=>{
+    const arr = byEmp[k].slice().sort((a,b)=>new Date(a.fecha)-new Date(b.fecha));
+    const name = arr[0]?.empleado || k;
+
+    let totalHours = 0;
+    const pairs = [];
+    let pendingEntry = null;
+
+    arr.forEach(r=>{
+      if(r.tipo === "Entrada"){
+        if(pendingEntry) pairs.push({entrada: pendingEntry, salida: null});
+        pendingEntry = r;
+      }else if(r.tipo === "Salida"){
+        if(pendingEntry){
+          const start = new Date(pendingEntry.fecha).getTime();
+          const end   = new Date(r.fecha).getTime();
+          if(end >= start) totalHours += (end-start)/(1000*60*60);
+          pairs.push({entrada: pendingEntry, salida: r});
+          pendingEntry = null;
+        }else{
+          pairs.push({entrada: null, salida: r});
+        }
+      }
+    });
+    if(pendingEntry) pairs.push({entrada: pendingEntry, salida: null});
+
+    summaryRows.push(`<tr><td>${name}</td><td><b>${hoursToHMM(totalHours)}</b></td><td><span class="pill">${k}</span></td></tr>`);
+
+    let rows = "";
+    pairs.forEach((p,idx)=>{
+      const e = p.entrada;
+      const s = p.salida;
+
+      const eTime = e ? toLocalTime(e.fecha) : "—";
+      const sTime = s ? toLocalTime(s.fecha) : "—";
+
+      const eLoc  = e ? coordText(e) : "—";
+      const sLoc  = s ? coordText(s) : (p.entrada ? "<i>Pendiente</i>" : "—");
+
+      let tramo = "—";
+      if(e && s){
+        const start = new Date(e.fecha).getTime();
+        const end = new Date(s.fecha).getTime();
+        if(end >= start) tramo = hoursToHMM((end-start)/(1000*60*60));
+      }else if(e && !s){
+        tramo = "<i>Pendiente</i>";
+      }else if(!e && s){
+        tramo = "<i>Salida sin entrada</i>";
+      }
+
+      rows += `<tr>
+        <td>${idx+1}</td>
+        <td>${eTime}<div class="subtle">${eLoc}</div></td>
+        <td>${sTime}<div class="subtle">${sLoc}</div></td>
+        <td>${tramo}</td>
+      </tr>`;
+    });
+
+    detailsBlocks.push(`
+      <div class="card" style="margin-top:12px">
+        <h4 style="margin:0 0 8px 0">${name}
+          <span class="pill">Código: ${k}</span>
+          <span class="pill">Total: ${hoursToHMM(totalHours)}</span>
+        </h4>
+        <table>
+          <thead><tr><th>#</th><th>Entrada (hora + ubicación)</th><th>Salida (hora + ubicación)</th><th>Horas</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `);
+  });
+
+  $("daySummary").innerHTML = `
+    <table>
+      <thead><tr><th>Empleado</th><th>Total</th><th>Código</th></tr></thead>
+      <tbody>${summaryRows.join("")}</tbody>
+    </table>`;
+  $("dayDetails").innerHTML = detailsBlocks.join("");
+}
+
+function exportDayCSV(){
+  const dayKey = $("dayPicker").value;
+  const dayRecs = getDayRecords(dayKey).slice().sort((a,b)=>new Date(a.fecha)-new Date(b.fecha));
+  if(dayRecs.length===0){ alert("No hay registros para ese día."); return; }
+
+  const header = ["fecha_iso","fecha_dia","hora_local","codigo","empleado","tipo","lat","lng","precision_m","maps"].join(",");
+  const lines = dayRecs.map(r=>{
+    const hora = toLocalTime(r.fecha);
+    const maps = (r.lat==null||r.lng==null) ? "" : `https://www.google.com/maps?q=${r.lat},${r.lng}`;
+    return [
+      r.fecha,
+      dayKey,
+      hora,
+      (r.codigo||""),
+      (r.empleado||""),
+      (r.tipo||""),
+      (r.lat==null?"":r.lat),
+      (r.lng==null?"":r.lng),
+      (r.precision==null?"":Math.round(r.precision)),
+      maps
+    ].map(v=>String(v).replaceAll('"','""')).map(v=>`"${v}"`).join(",");
+  });
+
+  downloadText(`asistencia_${dayKey}.csv`, header + "\n" + lines.join("\n"));
+}
+
+function deleteDay(){
+  const dayKey = $("dayPicker").value;
+  if(!confirm(`¿Borrar TODOS los registros del día ${dayKey}?`)) return;
+  const recs = JSON.parse(lsGet(K_REC,"[]"));
+  const kept = recs.filter(r=>toLocalDateKey(r.fecha)!==dayKey);
+  lsSet(K_REC, JSON.stringify(kept));
+  lsSet(K_TOUCH, String(Date.now()));
+  renderDay(true);
+  toast("Registros del día borrados");
+}
+
+function clearRecords(){
+  if(!confirm("¿Borrar TODOS los registros? Esta acción no se puede deshacer.")) return;
+  lsSet(K_REC, "[]");
+  lsSet(K_TOUCH, String(Date.now()));
+  toast("Registros borrados");
+  if(adminTab==="logs") renderDay(true);
+}
+</script>
+
+</body>
+</html>
