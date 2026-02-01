@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EZ Street | Asistencia</title>
+<style>
+  :root{
+    --bg:#0b1220;
+    --card:#111a2e;
+    --line:#24324f;
+    --muted:#b8c3d6;
+    --btn:#1f3b6d;
+    --btn2:#274a86;
+    --danger:#7a1f2a;
+    --ok:#2c7a4b;
+  }
+  body{font-family:Arial,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:#fff;margin:0;padding:20px}
+  .card{max-width:760px;margin:0 auto 14px auto;background:var(--card);padding:18px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+  h2,h3,h4{margin:0 0 10px 0}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .row > *{flex:1 1 160px}
+  input,select{width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:#0f1830;color:#fff;outline:none}
+  input::placeholder{color:#6f7ea0}
+  button{width:100%;padding:12px;margin-top:10px;border:none;border-radius:10px;background:var(--btn);color:#fff;font-size:16px;cursor:pointer}
+  button:hover{background:var(--btn2)}
+  .btn-inline{width:auto;padding:8px 10px;margin:0;border-radius:10px;font-size:14px}
+  .btn-danger{background:var(--danger)}
+  .btn-danger:hover{filter:brightness(1.1)}
+  .btn-ok{background:var(--ok)}
+  .btn-ok:hover{filter:brightness(1.1)}
+  .hidden{display:none}
+  .msg{margin:8px 0 0 0;color:#ff8a8a;min-height:18px}
+  table{width:100%;border-collapse:collapse;margin-top:12px}
+  th,td{border-bottom:1px solid var(--line);padding:8px;text-align:left;vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:13px}
+  td{font-size:14px}
+  .pill{display:inline-block;padding:3px 8px;border-radius:999px;background:#0f1830;border:1px solid var(--line);color:var(--muted);font-size:12px}
+  .tabs{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 0 0}
+  .tab{flex:1 1 160px;padding:10px;border-radius:10px;background:#0f1830;border:1px solid var(--line);color:#fff;cursor:pointer}
+  .tab.active{background:var(--btn);border-color:transparent}
+  .subtle{color:var(--muted);font-size:13px;line-height:1.35}
+  .grid2{display:grid;grid-template-columns:1fr;gap:10px}
+  @media(min-width:860px){ .grid2{grid-template-columns:1fr 1fr} }
+  a{color:#89b4ff;text-decoration:none}
+  a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="card" id="login">
+  <h2>Control de Asistencia</h2>
+  <div class="subtle">Accede como <b>ADMIN2</b> o como empleado (código + PIN).</div>
+  <div class="msg" id="msg"></div>
+  <div class="row">
+    <input id="user" placeholder="Código o ADMIN2" autocomplete="username">
+    <input id="pin" type="password" placeholder="PIN" autocomplete="current-password">
+  </div>
+  <button onclick="doLogin()">Entrar</button>
+</div>
+
+<!-- ADMIN -->
+<div class="card hidden" id="adminWrap">
+  <h3>Panel Admin <span class="pill">Admin activo: ADMIN2</span></h3>
+
+  <div class="tabs">
+    <div class="tab active" id="tabUsers" onclick="showAdminTab('users')">Usuarios</div>
+    <div class="tab" id="tabLogs" onclick="showAdminTab('logs')">Registros</div>
+  </div>
+
+  <!-- USERS TAB -->
+  <div id="adminUsers">
+    <h4 style="margin-top:14px">Crear / editar empleado</h4>
+    <div class="row">
+      <input id="eCode" placeholder="Código (ej. 1003)">
+      <input id="eName" placeholder="Nombre (ej. Luis García)">
+      <input id="ePin" placeholder="PIN (4-8 dígitos)">
+    </div>
+    <button class="btn-ok" onclick="saveEmp()">Guardar (crear/actualizar)</button>
+
+    <table>
+      <thead><tr><th>Código</th><th>Nombre</th><th>PIN</th><th>Acción</th></tr></thead>
+      <tbody id="empTable"></tbody>
+    </table>
+
+    <button class="btn-danger" onclick="clearRecords()">Borrar TODOS los registros (no usuarios)</button>
+  </div>
+
+  <!-- LOGS TAB -->
+  <div id="adminLogs" class="hidden">
+    <h4 style="margin-top:14px">Registros por día</h4>
+
+    <div class="grid2">
+      <div>
+        <div class="subtle">Selecciona un día (calendario) y verás el panel de ese día.</div>
+        <div class="row" style="margin-top:8px">
+          <input id="dayPicker" type="date">
+          <button class="btn-inline" onclick="setToday()">Hoy</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn-inline" onclick="exportDayCSV()">Exportar CSV (día seleccionado)</button>
+          <button class="btn-inline btn-danger" onclick="deleteDay()">Borrar registros del día</button>
+        </div>
+      </div>
+      <div>
+        <div class="subtle"><b>Resumen</b> (día seleccionado): horas totales por empleado.</div>
+        <div id="daySummary" style="margin-top:10px"></div>
+      </div>
+    </div>
+
+    <h4 style="margin-top:14px">Detalle (Entradas / Salidas / Ubicación)</h4>
+    <div class="subtle">Se agrupa por empleado. Si falta una salida, esa entrada queda como <i>pendiente</i>.</div>
+    <div id="dayDetails"></div>
+  </div>
+
+  <button style="margin-top:16px" onclick="logout()">Salir</button>
+</div>
+
+<!-- EMPLOYEE -->
+<div class="card hidden" id="empWrap">
+  <h3 id="empName"></h3>
+  <div class="subtle" id="empInfo"></div>
+  <button class="btn-ok" onclick="mark('Entrada')">Marcar Entrada</button>
+  <button onclick="mark('Salida')">Marcar Salida</button>
+  <button style="margin-top:16px" onclick="logout()">Salir</button>
+</div>
+
+<script>
+/* =========================
+   CONFIG (ADMIN FIJO)
+========================= */
+const ADMIN_USER = "ADMIN2";
+const ADMIN_PIN  = "4321";
+
+/* =========================
+   STORAGE INIT
+========================= */
+if(!localStorage.employees){
+  localStorage.employees = JSON.stringify([
+    {code:"1001", name:"Juan Pérez", pin:"1111"},
+    {code:"1002", name:"María López", pin:"2222"}
+  ]);
+}
+if(!localStorage.records) localStorage.records = "[]";
+
+/* =========================
+   STATE
+========================= */
+let currentEmp = null;
+
+/* =========================
+   HELPERS
+========================= */
+const $ = (id)=>document.getElementById(id);
+
+function pad2(n){ return String(n).padStart(2,"0"); }
+
+function toLocalTime(iso){
+  try{
+    const d = new Date(iso);
+    return pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds());
+  }catch(e){ return ""; }
+}
+
+function toLocalDateKey(iso){
+  // YYYY-MM-DD in local time
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const m = pad2(d.getMonth()+1);
+  const day = pad2(d.getDate());
+  return `${y}-${m}-${day}`;
+}
+
+function hoursToHMM(totalHours){
+  const mins = Math.round(totalHours*60);
+  const h = Math.floor(mins/60);
+  const m = mins%60;
+  return `${h}h ${pad2(m)}m`;
+}
+
+function mapsLink(lat,lng){
+  if(lat==null || lng==null) return "";
+  const url = `https://www.google.com/maps?q=${lat},${lng}`;
+  return `<a href="${url}" target="_blank" rel="noopener">Ver mapa</a>`;
+}
+
+function downloadText(filename, text){
+  const blob = new Blob([text], {type:"text/plain;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+/* =========================
+   LOGIN / LOGOUT
+========================= */
+function doLogin(){
+  const u = $("user").value.trim();
+  const p = $("pin").value.trim();
+
+  if(u === ADMIN_USER && p === ADMIN_PIN){
+    $("login").classList.add("hidden");
+    $("adminWrap").classList.remove("hidden");
+    loadEmps();
+    initDayPicker();
+    renderDay();
+    return;
+  }
+
+  const emps = JSON.parse(localStorage.employees);
+  const emp = emps.find(e => e.code === u && e.pin === p);
+  if(!emp){
+    $("msg").textContent = "Datos incorrectos";
+    return;
+  }
+
+  currentEmp = emp;
+  $("login").classList.add("hidden");
+  $("empWrap").classList.remove("hidden");
+  $("empName").textContent = emp.name;
+  $("empInfo").innerHTML = `<span class="pill">Código: ${emp.code}</span>`;
+}
+
+function logout(){ location.reload(); }
+
+/* =========================
+   ADMIN TABS
+========================= */
+function showAdminTab(which){
+  if(which === "users"){
+    $("adminUsers").classList.remove("hidden");
+    $("adminLogs").classList.add("hidden");
+    $("tabUsers").classList.add("active");
+    $("tabLogs").classList.remove("active");
+  }else{
+    $("adminUsers").classList.add("hidden");
+    $("adminLogs").classList.remove("hidden");
+    $("tabUsers").classList.remove("active");
+    $("tabLogs").classList.add("active");
+    initDayPicker();
+    renderDay();
+  }
+}
+
+/* =========================
+   USERS CRUD
+========================= */
+function loadEmps(){
+  const emps = JSON.parse(localStorage.employees);
+  const tb = $("empTable");
+  tb.innerHTML = "";
+  emps.forEach(e=>{
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${e.code}</td>
+      <td>${e.name}</td>
+      <td>${e.pin}</td>
+      <td>
+        <button class="btn-inline" onclick="editEmp('${e.code}')">Editar</button>
+        <button class="btn-inline btn-danger" onclick="deleteEmp('${e.code}')">Borrar</button>
+      </td>`;
+    tb.appendChild(tr);
+  });
+}
+
+function saveEmp(){
+  const c = $("eCode").value.trim();
+  const n = $("eName").value.trim();
+  const p = $("ePin").value.trim();
+
+  if(!c || !n || !p) return alert("Completa código, nombre y PIN.");
+  if(p.length < 4 || p.length > 8) return alert("PIN recomendado: 4 a 8 dígitos.");
+
+  let emps = JSON.parse(localStorage.employees);
+  const i = emps.findIndex(x=>x.code===c);
+  if(i>=0) emps[i] = {code:c,name:n,pin:p};
+  else emps.push({code:c,name:n,pin:p});
+  localStorage.employees = JSON.stringify(emps);
+
+  $("eCode").value = $("eName").value = $("ePin").value = "";
+  loadEmps();
+  alert("Guardado.");
+}
+
+function editEmp(code){
+  const e = JSON.parse(localStorage.employees).find(x=>x.code===code);
+  if(!e) return;
+  $("eCode").value = e.code;
+  $("eName").value = e.name;
+  $("ePin").value = e.pin;
+}
+
+function deleteEmp(code){
+  if(!confirm("¿Borrar este empleado?")) return;
+  let emps = JSON.parse(localStorage.employees);
+  emps = emps.filter(x=>x.code!==code);
+  localStorage.employees = JSON.stringify(emps);
+  loadEmps();
+}
+
+/* =========================
+   RECORDING (NO RESTRICTION)
+========================= */
+function mark(tipo){
+  if(!currentEmp) return;
+
+  // Siempre registramos, con o sin GPS.
+  if(!navigator.geolocation){
+    saveRecord(tipo, null);
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    pos => saveRecord(tipo, pos),
+    err => saveRecord(tipo, null),
+    { enableHighAccuracy:true, timeout:8000, maximumAge:0 }
+  );
+}
+
+function saveRecord(tipo, pos){
+  const recs = JSON.parse(localStorage.records);
+  recs.push({
+    empleado: currentEmp.name,
+    codigo: currentEmp.code,
+    tipo: tipo, // "Entrada" / "Salida"
+    fecha: new Date().toISOString(),
+    lat: pos ? pos.coords.latitude : null,
+    lng: pos ? pos.coords.longitude : null,
+    precision: pos ? pos.coords.accuracy : null
+  });
+  localStorage.records = JSON.stringify(recs);
+  alert(tipo + " registrada");
+}
+
+/* =========================
+   ADMIN: DAY VIEW (CALENDAR)
+========================= */
+function initDayPicker(){
+  const dp = $("dayPicker");
+  if(!dp.value){
+    // Default hoy (local)
+    const now = new Date();
+    dp.value = `${now.getFullYear()}-${pad2(now.getMonth()+1)}-${pad2(now.getDate())}`;
+  }
+  dp.onchange = () => renderDay();
+}
+
+function setToday(){
+  const now = new Date();
+  $("dayPicker").value = `${now.getFullYear()}-${pad2(now.getMonth()+1)}-${pad2(now.getDate())}`;
+  renderDay();
+}
+
+function getDayRecords(dayKey){
+  const recs = JSON.parse(localStorage.records);
+  return recs.filter(r => toLocalDateKey(r.fecha) === dayKey);
+}
+
+function renderDay(){
+  const dayKey = $("dayPicker").value;
+  const dayRecs = getDayRecords(dayKey);
+
+  // Group by employee code
+  const byEmp = {};
+  dayRecs.forEach(r=>{
+    const k = r.codigo || r.empleado;
+    if(!byEmp[k]) byEmp[k] = [];
+    byEmp[k].push(r);
+  });
+
+  // Build summary and details
+  const summaryRows = [];
+  const detailsBlocks = [];
+
+  const empKeys = Object.keys(byEmp).sort();
+
+  if(empKeys.length === 0){
+    $("daySummary").innerHTML = `<div class="pill">Sin registros para ${dayKey}</div>`;
+    $("dayDetails").innerHTML = `<div class="subtle" style="margin-top:10px">No hay registros para este día.</div>`;
+    return;
+  }
+
+  empKeys.forEach(k=>{
+    const arr = byEmp[k].slice().sort((a,b)=>new Date(a.fecha)-new Date(b.fecha));
+    const name = arr[0]?.empleado || k;
+
+    // Pair Entrada->Salida sequentially
+    let totalHours = 0;
+    const pairs = [];
+    let pendingEntry = null;
+
+    arr.forEach(r=>{
+      if(r.tipo === "Entrada"){
+        // If there was already a pending entry without exit, keep it as pending and start new
+        if(pendingEntry) pairs.push({entrada: pendingEntry, salida: null});
+        pendingEntry = r;
+      }else if(r.tipo === "Salida"){
+        if(pendingEntry){
+          const start = new Date(pendingEntry.fecha).getTime();
+          const end   = new Date(r.fecha).getTime();
+          if(end >= start) totalHours += (end-start)/(1000*60*60);
+          pairs.push({entrada: pendingEntry, salida: r});
+          pendingEntry = null;
+        }else{
+          // salida sin entrada
+          pairs.push({entrada: null, salida: r});
+        }
+      }else{
+        // otros tipos (si existieran)
+      }
+    });
+    if(pendingEntry) pairs.push({entrada: pendingEntry, salida: null});
+
+    summaryRows.push(`<tr><td>${name}</td><td><b>${hoursToHMM(totalHours)}</b></td><td><span class="pill">${k}</span></td></tr>`);
+
+    // Build detail table for this employee
+    let rows = "";
+    pairs.forEach((p,idx)=>{
+      const e = p.entrada;
+      const s = p.salida;
+
+      const eTime = e ? toLocalTime(e.fecha) : "—";
+      const sTime = s ? toLocalTime(s.fecha) : "—";
+      const eLoc  = e ? (e.lat!=null ? `${e.lat.toFixed(6)}, ${e.lng.toFixed(6)} (${Math.round(e.precision||0)}m) · ${mapsLink(e.lat,e.lng)}` : "No disponible") : "—";
+      const sLoc  = s ? (s.lat!=null ? `${s.lat.toFixed(6)}, ${s.lng.toFixed(6)} (${Math.round(s.precision||0)}m) · ${mapsLink(s.lat,s.lng)}` : "No disponible") : (p.entrada ? "<i>Pendiente</i>" : "—");
+
+      let tramo = "—";
+      if(e && s){
+        const start = new Date(e.fecha).getTime();
+        const end = new Date(s.fecha).getTime();
+        if(end >= start) tramo = hoursToHMM((end-start)/(1000*60*60));
+      }else if(e && !s){
+        tramo = "<i>Pendiente</i>";
+      }else if(!e && s){
+        tramo = "<i>Salida sin entrada</i>";
+      }
+
+      rows += `<tr>
+        <td>${idx+1}</td>
+        <td>${eTime}<div class="subtle">${eLoc}</div></td>
+        <td>${sTime}<div class="subtle">${sLoc}</div></td>
+        <td>${tramo}</td>
+      </tr>`;
+    });
+
+    const block = `
+      <div class="card" style="margin-top:12px">
+        <h4 style="margin:0 0 8px 0">${name} <span class="pill">Código: ${k}</span> <span class="pill">Total: ${hoursToHMM(totalHours)}</span></h4>
+        <table>
+          <thead><tr><th>#</th><th>Entrada</th><th>Salida</th><th>Horas</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+    detailsBlocks.push(block);
+  });
+
+  $("daySummary").innerHTML = `
+    <table>
+      <thead><tr><th>Empleado</th><th>Total</th><th>Código</th></tr></thead>
+      <tbody>${summaryRows.join("")}</tbody>
+    </table>`;
+
+  $("dayDetails").innerHTML = detailsBlocks.join("");
+}
+
+function exportDayCSV(){
+  const dayKey = $("dayPicker").value;
+  const dayRecs = getDayRecords(dayKey).slice().sort((a,b)=>new Date(a.fecha)-new Date(b.fecha));
+  if(dayRecs.length===0){ alert("No hay registros para ese día."); return; }
+
+  const header = ["fecha_iso","fecha_dia","hora_local","codigo","empleado","tipo","lat","lng","precision_m"].join(",");
+  const lines = dayRecs.map(r=>{
+    const hora = toLocalTime(r.fecha);
+    return [
+      r.fecha,
+      dayKey,
+      hora,
+      (r.codigo||""),
+      (r.empleado||""),
+      (r.tipo||""),
+      (r.lat==null?"":r.lat),
+      (r.lng==null?"":r.lng),
+      (r.precision==null?"":Math.round(r.precision))
+    ].map(v=>String(v).replaceAll('"','""')).map(v=>`"${v}"`).join(",");
+  });
+
+  downloadText(`asistencia_${dayKey}.csv`, header + "\n" + lines.join("\n"));
+}
+
+function deleteDay(){
+  const dayKey = $("dayPicker").value;
+  if(!confirm(`¿Borrar TODOS los registros del día ${dayKey}?`)) return;
+  const recs = JSON.parse(localStorage.records);
+  const kept = recs.filter(r=>toLocalDateKey(r.fecha)!==dayKey);
+  localStorage.records = JSON.stringify(kept);
+  renderDay();
+  alert("Registros del día borrados.");
+}
+
+function clearRecords(){
+  if(!confirm("¿Borrar TODOS los registros? Esta acción no se puede deshacer.")) return;
+  localStorage.records = "[]";
+  alert("Registros borrados.");
+  renderDay();
+}
+</script>
+
+</body>
+</html>
