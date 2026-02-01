@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>EZ Street | Asistencia</title>
+<style>
+body{font-family:Arial;background:#0b1220;color:#fff;margin:0;padding:20px}
+.card{max-width:600px;margin:auto;background:#111a2e;padding:20px;border-radius:10px}
+button{width:100%;padding:12px;margin-top:10px;border:none;border-radius:6px;background:#1f3b6d;color:#fff;font-size:16px}
+input{width:100%;padding:10px;margin-top:10px;border-radius:6px;border:none}
+table{width:100%;margin-top:15px;border-collapse:collapse}
+td,th{padding:6px;border-bottom:1px solid #333;text-align:left}
+.hidden{display:none}
+.msg{margin-bottom:10px;color:#f88}
+</style>
+</head>
+<body>
+
+<div class="card" id="login">
+  <h2>Control de Asistencia</h2>
+  <div class="msg" id="msg"></div>
+  <input id="user" placeholder="Código o ADMIN2">
+  <input id="pin" type="password" placeholder="PIN">
+  <button onclick="login()">Entrar</button>
+</div>
+
+<div class="card hidden" id="admin">
+  <h3>Panel Admin</h3>
+  <p><strong>Admin activo:</strong> ADMIN2</p>
+
+  <h4>Crear / editar empleado</h4>
+  <input id="eCode" placeholder="Código">
+  <input id="eName" placeholder="Nombre">
+  <input id="ePin" placeholder="PIN">
+  <button onclick="saveEmp()">Guardar</button>
+
+  <table>
+    <thead><tr><th>Código</th><th>Nombre</th><th>PIN</th><th></th></tr></thead>
+    <tbody id="empTable"></tbody>
+  </table>
+
+  <button onclick="logout()">Salir</button>
+</div>
+
+<div class="card hidden" id="emp">
+  <h3 id="empName"></h3>
+  <button onclick="mark('Entrada')">Marcar Entrada</button>
+  <button onclick="mark('Salida')">Marcar Salida</button>
+  <button onclick="logout()">Salir</button>
+</div>
+
+<script>
+// ADMIN FIJO NUEVO (NO depende de localStorage)
+const ADMIN_USER = "ADMIN2";
+const ADMIN_PIN = "4321";
+
+if(!localStorage.employees){
+  localStorage.employees=JSON.stringify([
+    {code:"1001",name:"Juan Pérez",pin:"1111"}
+  ]);
+}
+if(!localStorage.records) localStorage.records="[]";
+
+let current=null;
+
+function login(){
+  const u=user.value.trim(), p=pin.value.trim();
+  if(u===ADMIN_USER && p===ADMIN_PIN){
+    document.getElementById("login").style.display="none";
+    document.getElementById("admin").classList.remove("hidden");
+    loadEmps();
+    return;
+  }
+  const emps=JSON.parse(localStorage.employees);
+  const e=emps.find(x=>x.code===u && x.pin===p);
+  if(!e){msg.innerText="Datos incorrectos";return;}
+  current=e;
+  document.getElementById("login").style.display="none";
+  document.getElementById("emp").classList.remove("hidden");
+  empName.innerText=e.name;
+}
+
+function saveEmp(){
+  const c=eCode.value,n=eName.value,p=ePin.value;
+  if(!c||!n||!p)return alert("Completa todos los campos");
+  let emps=JSON.parse(localStorage.employees);
+  const i=emps.findIndex(x=>x.code===c);
+  if(i>=0) emps[i]={code:c,name:n,pin:p};
+  else emps.push({code:c,name:n,pin:p});
+  localStorage.employees=JSON.stringify(emps);
+  loadEmps();
+  eCode.value=eName.value=ePin.value="";
+}
+
+function loadEmps(){
+  empTable.innerHTML="";
+  JSON.parse(localStorage.employees).forEach(e=>{
+    empTable.innerHTML+=`<tr>
+      <td>${e.code}</td><td>${e.name}</td><td>${e.pin}</td>
+      <td><button onclick="editEmp('${e.code}')">Editar</button></td>
+    </tr>`;
+  });
+}
+
+function editEmp(c){
+  const e=JSON.parse(localStorage.employees).find(x=>x.code===c);
+  eCode.value=e.code; eName.value=e.name; ePin.value=e.pin;
+}
+
+function mark(type){
+  if(!navigator.geolocation){
+    save(type,null); return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    pos=>save(type,pos),
+    err=>save(type,null),
+    {timeout:5000}
+  );
+}
+
+function save(type,pos){
+  const recs=JSON.parse(localStorage.records);
+  recs.push({
+    empleado:current.name,
+    codigo:current.code,
+    tipo:type,
+    fecha:new Date().toISOString(),
+    lat:pos?pos.coords.latitude:null,
+    lng:pos?pos.coords.longitude:null,
+    precision:pos?pos.coords.accuracy:null
+  });
+  localStorage.records=JSON.stringify(recs);
+  alert(type+" registrada");
+}
+
+function logout(){location.reload();}
+</script>
+
+</body>
+</html>
